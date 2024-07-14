@@ -1,18 +1,17 @@
 import express from 'express';
+import cors from 'cors';
+import { Op } from 'sequelize';
 import { sequelize } from './db/connection.js';
 import { Transaction } from './db/models/transaction.js';
 const app = express();
 const port = 3000;
 
+app.use(cors())
 app.use(express.json())
 
 app.post('/transactions', async (req, res) => {
-  const body = req.body;
-  const data = {
-    ...body,
-  }
   try {
-    const response = await Transaction.create(data)
+    const response = await Transaction.create(req.body)
     res.json(response);
   } catch (error) {
     const err = error.message || error.data.message || 'error';
@@ -24,6 +23,60 @@ app.get('/transactions', async (req, res) => {
   try {
     const response = await Transaction.findAll()
     res.json(response)
+  } catch (error) {
+    const err = error.message || error.data.message || 'error';
+    res.status(500).send(err);
+  }
+});
+
+app.get('/transactions/by-category', async (req, res) => {
+  const { category } = req.query;
+  try {
+    const transactions = await Transaction.findAll({
+      where: {
+        Category: category
+      },
+      order: [['Category', 'ASC'], ['Date', 'ASC']],
+    });
+    res.json(transactions);
+  } catch (error) {
+    const err = error.message || error.data.message || 'error';
+    res.status(500).send(err);
+  }
+});
+
+app.get('/transactions/by-date', async (req, res) => {
+  const { startDate, endDate } = req.query;
+
+  if (!startDate || !endDate) {
+    return res.status(400).json({ error: 'You must provide startDate and endDate' });
+  }
+
+  try {
+    const transactions = await Transaction.findAll({
+      where: {
+        Date: {
+          [Op.between]: [new Date(startDate), new Date(endDate)]
+        }
+      },
+      order: [['Date', 'ASC']],
+    });
+
+    res.json(transactions);
+  } catch (error) {
+    const err = error.message || error.data.message || 'error';
+    res.status(500).send(err);
+  }
+});
+
+app.get('/categories', async (req, res) => {
+  try {
+    const categories = await Transaction.findAll({
+      attributes: [[sequelize.fn('DISTINCT', sequelize.col('Category')), 'Category']],
+      order: [['Category', 'ASC']],
+    });
+
+    res.json(categories.map(category => category.Category));
   } catch (error) {
     const err = error.message || error.data.message || 'error';
     res.status(500).send(err);
